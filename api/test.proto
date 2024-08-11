@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package api;
+
+option go_package="genproto/api";
+
+message Request {
+    string text = 1;
+}
+
+message Response {
+    string text = 1;
+}
+
+service GreetUnaryService {
+    rpc Get(Request) returns (Response) {};
+}
+
+service GreetClientStreamingService {
+    rpc Get(stream Request) returns (Response) {};
+}
+
+service GreetServerStreamingService {
+    rpc Get(Request) returns (stream Response) {};
+}
+
+service GreetBiDirectionalService {
+    rpc Get(stream Request) returns (stream Response) {};
+}
