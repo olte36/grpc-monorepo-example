@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package api;
+
+import "google/protobuf/empty.proto";
+
+option go_package="genproto/api";
+
+message Stock {
+    string ticker = 1;
+    optional string description = 2;
+}
+
+message ListResponse {
+    repeated Stock stocks = 1;
+}
+
+message GetPriceResponse {
+    Stock stock = 1;
+    int32 price = 2;
+    int32 exp = 3;
+}
+
+message TradeRequest {
+    Stock stock = 1;
+    int32 amount = 2;
+    optional int32 limitPrice = 3;
+    optional int32 exp = 4;
+}
+
+message TradeResponse {
+    Stock stock = 1;
+    int32 amount = 2;
+    int32 price = 3;
+    int32 exp = 4;
+}
+
+service StockService {
+    rpc List(google.protobuf.Empty) returns (ListResponse) {};
+    //rpc PlaceOrders(stream Request) returns (Response) {};
+    rpc GetPrice(Stock) returns (stream GetPriceResponse) {};
+    rpc Trade(stream TradeRequest) returns (stream TradeResponse) {};
+}
