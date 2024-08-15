@@ -3,6 +3,7 @@ syntax = "proto3";
 package api;
 
 import "google/protobuf/empty.proto";
+import "google/protobuf/duration.proto";
 
 option go_package="genproto/api";
 
@@ -13,6 +14,11 @@ message Stock {
 
 message ListResponse {
     repeated Stock stocks = 1;
+}
+
+message GetPriceRequest {
+    Stock stock = 1;
+    optional google.protobuf.Duration trackInterval = 2;
 }
 
 message GetPriceResponse {
@@ -38,6 +44,6 @@ message TradeResponse {
 service StockService {
     rpc List(google.protobuf.Empty) returns (ListResponse) {};
     //rpc PlaceOrders(stream Request) returns (Response) {};
-    rpc GetPrice(Stock) returns (stream GetPriceResponse) {};
+    rpc GetPrice(GetPriceRequest) returns (stream GetPriceResponse) {};
     rpc Trade(stream TradeRequest) returns (stream TradeResponse) {};
 }
