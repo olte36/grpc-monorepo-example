@@ -2,11 +2,17 @@ package impl
 
 import (
 	"context"
+	"fmt"
+	"math"
 	"math/rand"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/olte36/grpc-monorepo-example/genproto/api"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -28,6 +34,7 @@ type stock struct {
 }
 
 func (s *stockServer) List(context.Context, *emptypb.Empty) (*api.ListResponse, error) {
+	log.Info().Msg("Giving the list of stocks")
 	resp := api.ListResponse{}
 	for _, stock := range s.stocks {
 		resp.Stocks = append(resp.Stocks, &api.Stock{
@@ -39,26 +46,27 @@ func (s *stockServer) List(context.Context, *emptypb.Empty) (*api.ListResponse, 
 }
 
 func (s *stockServer) GetPrice(req *api.GetPriceRequest, respStream grpc.ServerStreamingServer[api.GetPriceResponse]) error {
+	log.Info().Msgf("Streaming the price of %s", req.Stock.Ticker)
 	s.mu.Lock()
 	trackedStock, ok := s.stocks[req.Stock.Ticker]
 	s.mu.Unlock()
 	if !ok {
+		log.Error().Msgf("We don't have the stock %s", req.Stock.Ticker)
 		return status.Errorf(codes.NotFound, "the stock %s has not been found", req.Stock.Ticker)
 	}
 	timer := time.NewTicker(req.TrackInterval.AsDuration())
 	for {
 		select {
 		case <-respStream.Context().Done():
+			log.Info().Msgf("Finished streaming the price of %s", req.Stock.Ticker)
 			return nil
 		case <-timer.C:
-			s.mu.Lock()
 			resp := api.GetPriceResponse{
 				Stock: &api.Stock{
 					Ticker: trackedStock.ticker,
 				},
 				Exp: exp,
 			}
-			s.mu.Unlock()
 			err := respStream.Send(&resp)
 			if err != nil {
 				return status.Error(codes.Internal, err.Error())
@@ -77,6 +85,7 @@ func (s *stockServer) changePrices() {
 	for _, stock := range s.stocks {
 		sample := rand.Intn(100)
 		change := -1
+		// 50% chance the price will go up
 		if rand.Intn(2) == 1 {
 			change = 1
 		}
@@ -89,9 +98,9 @@ func (s *stockServer) changePrices() {
 		} else if sample >= 18 { // 2% chance the price will change by 61-90%
 			change *= rand.Intn(30) + 61
 		} else { // 18% chance the price will not change
-
+			change = 0
 		}
-		stock.price *= (1 - change)
+		stock.price = stock.price * (100 - change) / 100
 	}
 }
 
@@ -100,22 +109,22 @@ func (s *stockServer) initStocks() {
 		{
 			ticker:      "AAPL",
 			description: "Apple Inc. Common Stock",
-			price:       rand.Intn(40) + 80,
+			price:       randPrice(),
 		},
 		{
 			ticker:      "PEP",
 			description: "PepsiCo, Inc. Common Stock",
-			price:       rand.Intn(40) + 80,
+			price:       randPrice(),
 		},
 		{
 			ticker:      "JNJ",
 			description: "Johnson & Johnson Common Stock",
-			price:       rand.Intn(40) + 80,
+			price:       randPrice(),
 		},
 		{
 			ticker:      "CSCO",
 			description: "Cisco Systems, Inc. Common Stock",
-			price:       rand.Intn(40) + 80,
+			price:       randPrice(),
 		},
 	}
 	s.mu.Lock()
@@ -131,9 +140,26 @@ func RegisterStockServer(s *grpc.Server) {
 	stockServer.initStocks()
 	// change price every 5-7 sec
 	go func() {
-		sleepTime := rand.Intn(6) + 5
-		time.Sleep(time.Duration(sleepTime) * time.Second)
-		stockServer.changePrices()
+		for {
+			if zerolog.GlobalLevel() == zerolog.DebugLevel {
+				var printedStocks []string
+				stockServer.mu.Lock()
+				for _, v := range stockServer.stocks {
+					price := float64(v.price) / math.Pow(10, float64(exp))
+					printedStocks = append(printedStocks, fmt.Sprintf("%s %.2f", v.ticker, price))
+				}
+				stockServer.mu.Unlock()
+				slices.Sort(printedStocks)
+				log.Debug().Msgf("Current stocks: %s", strings.Join(printedStocks, ", "))
+			}
+			sleepTime := rand.Intn(6) + 5
+			time.Sleep(time.Duration(sleepTime) * time.Second)
+			stockServer.changePrices()
+		}
 	}()
 	api.RegisterStockServiceServer(s, &stockServer)
+}
+
+func randPrice() int {
+	return (rand.Intn(40) + 80) * int(math.Pow(10, 2))
 }

@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
 	"github.com/olte36/grpc-monorepo-example/server/impl"
@@ -20,6 +21,8 @@ func main() {
 	defer func() {
 		os.Exit(exitCode)
 	}()
+
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM)
 	defer cancel()
