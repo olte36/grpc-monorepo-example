@@ -3,6 +3,7 @@ package impl
 import (
 	"context"
 	"fmt"
+	"io"
 	"math"
 	"math/rand"
 	"slices"
@@ -54,29 +55,132 @@ func (s *stockServer) GetPrice(req *api.GetPriceRequest, respStream grpc.ServerS
 		log.Error().Msgf("We don't have the stock %s", req.Stock.Ticker)
 		return status.Errorf(codes.NotFound, "the stock %s has not been found", req.Stock.Ticker)
 	}
-	timer := time.NewTicker(req.TrackInterval.AsDuration())
+	ticker := time.NewTicker(req.TrackInterval.AsDuration())
 	for {
 		select {
 		case <-respStream.Context().Done():
 			log.Info().Msgf("Finished streaming the price of %s", req.Stock.Ticker)
-			return nil
-		case <-timer.C:
+			return respStream.Context().Err()
+		case <-ticker.C:
+			// suppose stocks cannot be deleted, so we don't sync them
 			resp := api.GetPriceResponse{
 				Stock: &api.Stock{
 					Ticker: trackedStock.ticker,
 				},
-				Exp: exp,
+				Price: int32(trackedStock.price),
 			}
 			err := respStream.Send(&resp)
 			if err != nil {
-				return status.Error(codes.Internal, err.Error())
+				return err
 			}
 		}
 	}
 }
 
-func (*stockServer) Trade(stream grpc.BidiStreamingServer[api.TradeRequest, api.TradeResponse]) error {
-	return status.Errorf(codes.Unimplemented, "method Trade not implemented")
+func (s *stockServer) Trade(stream grpc.BidiStreamingServer[api.TradeRequest, api.TradeResponse]) error {
+	log.Info().Msg("Starting trading")
+	ctx, cancel := context.WithCancel(stream.Context())
+	defer cancel()
+	requestedOrders := make(chan *api.TradeRequest, 1)
+	executedOrders := make(chan *api.TradeResponse, 1)
+	// execute orders in background
+	go s.executeOrders(ctx, requestedOrders, executedOrders)
+	for {
+		select {
+		case <-stream.Context().Done():
+			log.Info().Msg("Finishing trading")
+			return stream.Context().Err()
+		// send executed orders
+		case executedOrder := <-executedOrders:
+			err := stream.Send(executedOrder)
+			// in case of error, left orders are canceled
+			if err != nil {
+				log.Err(err).Msgf("Cannot send executed order %v to the client, the left orders will be canceled", executedOrder)
+				return err
+			}
+			log.Debug().Msgf("Sent the order %v", executedOrder)
+		// accept new orders
+		default:
+			req, err := stream.Recv()
+			// if a client closed the streams, left orders are canceled
+			if err == io.EOF {
+				return nil
+			}
+			// in case of error, left orders are canceled
+			if err != nil {
+				log.Err(err).Msgf("Error while receving a client's order, the left orders will be canceled")
+				return err
+			}
+			log.Debug().Msgf("Recieved the order %v", req)
+			requestedOrders <- req
+		}
+	}
+}
+
+func (s *stockServer) executeOrders(ctx context.Context, requestedOrders chan *api.TradeRequest, executedOrders chan *api.TradeResponse) {
+	ordersMap := map[string][]*api.TradeRequest{}
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case order := <-requestedOrders:
+			orders, ok := ordersMap[order.Stock.Ticker]
+			if !ok {
+				orders = []*api.TradeRequest{}
+			}
+			ordersMap[order.Stock.Ticker] = append(orders, order)
+		default:
+			var invalidOrders []*api.TradeRequest
+			var readyOrders []*api.TradeResponse
+			for ticker, orders := range ordersMap {
+				s.mu.Lock()
+				stock, ok := s.stocks[ticker]
+				// ignore invalid orders
+				if !ok {
+					invalidOrders = append(invalidOrders, orders...)
+					continue
+				}
+				var leftOrders []*api.TradeRequest
+				for _, order := range orders {
+					readyOrder := api.TradeResponse{
+						Stock: &api.Stock{
+							Ticker: stock.ticker,
+						},
+						Amount: order.Amount,
+						Price:  int32(stock.price),
+					}
+					// if no limit price, execute immediatly
+					if order.LimitPrice == nil {
+						readyOrders = append(readyOrders, &readyOrder)
+					} else if order.Amount > 0 { // buy
+						// if the current price <= the limit price, buy it, otherwise keep for the future
+						if stock.price <= int(*order.LimitPrice) {
+							readyOrders = append(readyOrders, &readyOrder)
+						} else {
+							leftOrders = append(leftOrders, order)
+						}
+					} else if order.Amount < 0 { // sell
+						// if the current price >= the limit price, sell it, otherwise keep for the future
+						if stock.price >= int(*order.LimitPrice) {
+							readyOrders = append(readyOrders, &readyOrder)
+						} else {
+							leftOrders = append(leftOrders, order)
+						}
+					} else { // orders with zero amount are ignored
+						invalidOrders = append(invalidOrders, order)
+					}
+				}
+				s.mu.Unlock()
+				ordersMap[ticker] = leftOrders
+			}
+			for _, readyOrder := range readyOrders {
+				executedOrders <- readyOrder
+			}
+			if len(invalidOrders) > 0 {
+				log.Warn().Msgf("Invalid orders: %v have been ignored", invalidOrders)
+			}
+		}
+	}
 }
 
 func (s *stockServer) changePrices() {

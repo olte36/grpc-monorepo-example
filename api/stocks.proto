@@ -24,21 +24,18 @@ message GetPriceRequest {
 message GetPriceResponse {
     Stock stock = 1;
     int32 price = 2;
-    int32 exp = 3;
 }
 
 message TradeRequest {
     Stock stock = 1;
     int32 amount = 2;
     optional int32 limitPrice = 3;
-    optional int32 exp = 4;
 }
 
 message TradeResponse {
     Stock stock = 1;
     int32 amount = 2;
     int32 price = 3;
-    int32 exp = 4;
 }
 
 service StockService {
