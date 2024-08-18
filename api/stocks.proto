@@ -16,31 +16,53 @@ message ListResponse {
     repeated Stock stocks = 1;
 }
 
-message GetPriceRequest {
+message OfferRequest {
     Stock stock = 1;
-    optional google.protobuf.Duration trackInterval = 2;
+    uint32 initial_price = 2;
 }
 
-message GetPriceResponse {
+message OfferResponse {
+    repeated Stock listed_stocks = 1;
+    repeated Stock rejected_stocks = 2;
+}
+
+message FollowRequest {
     Stock stock = 1;
-    int32 price = 2;
+    optional google.protobuf.Duration track_interval = 2;
+}
+
+message FollowResponse {
+    Stock stock = 1;
+    uint32 price = 2;
 }
 
 message TradeRequest {
     Stock stock = 1;
     int32 amount = 2;
-    optional int32 limitPrice = 3;
+    optional int32 limit_price = 3;
 }
 
 message TradeResponse {
     Stock stock = 1;
     int32 amount = 2;
-    int32 price = 3;
+    uint32 price = 3;
 }
 
 service StockService {
+    // Unary RPC
+    // Gets the list of all stocks
     rpc List(google.protobuf.Empty) returns (ListResponse) {};
-    //rpc PlaceOrders(stream Request) returns (Response) {};
-    rpc GetPrice(GetPriceRequest) returns (stream GetPriceResponse) {};
+    
+    // Client-side streaming RPC
+    // Offers new stocks to list
+    rpc Offer(stream OfferRequest) returns (OfferResponse) {};
+
+    // Server-side streaming RPC 
+    // Tracks the price of the stocks
+    rpc Follow(FollowRequest) returns (stream FollowResponse) {};
+
+    // Bidirectional streaming RPC 
+    // Places ordes to buy/sell 
+    // and returns them when they are executed
     rpc Trade(stream TradeRequest) returns (stream TradeResponse) {};
 }

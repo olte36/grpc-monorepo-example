@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
 	"github.com/olte36/grpc-monorepo-example/server/impl"
@@ -17,21 +18,31 @@ import (
 
 func main() {
 	exitCode := 0
+	var err error
 	defer func() {
+		if err != nil {
+			fmt.Println(err)
+		}
 		os.Exit(exitCode)
 	}()
-
-	//zerolog.SetGlobalLevel(zerolog.DebugLevel)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM)
 	defer cancel()
 
 	var port uint
+	var logLevelStr string
 	flag.UintVar(&port, "port", 8080, "")
+	flag.StringVar(&logLevelStr, "loglevel", "info", "")
+
+	logLevel, err := zerolog.ParseLevel(logLevelStr)
+	if err != nil {
+		exitCode = 1
+		return
+	}
+	zerolog.SetGlobalLevel(logLevel)
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
-		log.Err(err).Msgf("cannot listen on the port %d", port)
 		exitCode = 1
 		return
 	}
@@ -43,7 +54,6 @@ func main() {
 		log.Info().Msgf("Listening on port %d", port)
 		err := grpcServer.Serve(lis)
 		if err != nil {
-			log.Err(err).Msg("cannot serve")
 			exitCode = 1
 			cancel()
 		}
