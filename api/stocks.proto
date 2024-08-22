@@ -1,3 +1,7 @@
+// The file is an example of protobuf language. 
+// It contains message and service definitions for stock market operarions. 
+// This is for educational purposes, there is no interaction with real stocks markets.
+
 syntax = "proto3";
 
 package api;
@@ -7,62 +11,84 @@ import "google/protobuf/duration.proto";
 
 option go_package="genproto/api";
 
+// A stock with the ticker and the optional description.
+// The ticker must be unique across all stocks.
 message Stock {
     string ticker = 1;
     optional string description = 2;
 }
 
+// A response with all available stocks.
 message ListResponse {
     repeated Stock stocks = 1;
 }
 
+// A request to offer a new stock.
+// The price is in notaion 1.23E2 (123).
 message OfferRequest {
     Stock stock = 1;
     uint32 initial_price = 2;
 }
 
+// A response with the result of the stocks offering.
 message OfferResponse {
     repeated Stock listed_stocks = 1;
     repeated Stock rejected_stocks = 2;
 }
 
+// A request to track the price of a stock.
 message FollowRequest {
     Stock stock = 1;
     optional google.protobuf.Duration track_interval = 2;
 }
 
+// The current stock price.
+// The price is in notaion 1.23E2 (123).
 message FollowResponse {
     Stock stock = 1;
     uint32 price = 2;
 }
 
+// An order to buy or sell the stock with an optional limit price.
+// If the amount is negative, the stock will be sold, 
+// if the amount is positive, the stock will be bought.
+// The price is in notaion 1.23E2 (123).
 message TradeRequest {
     Stock stock = 1;
     int32 amount = 2;
     optional int32 limit_price = 3;
 }
 
+// An order result.
+// If the amount is negative, the stock has been sold, 
+// if the amount is positive, the stock has been bought.
+// The price is in notaion 1.23E2 (123).
 message TradeResponse {
     Stock stock = 1;
     int32 amount = 2;
     uint32 price = 3;
 }
 
+// A service that provides operations on a stocks market.
+// It contains all 4 possible types of RPC methods. 
 service StockService {
     // Unary RPC
-    // Gets the list of all stocks
+    // Gets the list of available stocks
     rpc List(google.protobuf.Empty) returns (ListResponse) {};
     
     // Client-side streaming RPC
-    // Offers new stocks to list
+    // Offers new stocks, when the client closes the stream,
+    // the method returns the result with accepted and rejected stocks.
+    // Stocks are rejected when they duplicate existing ones or the price is incorrect.
     rpc Offer(stream OfferRequest) returns (OfferResponse) {};
 
     // Server-side streaming RPC 
-    // Tracks the price of the stocks
+    // Tracks the price of the stock with the interval passed in the request.
+    // If the track interval is ommited, the methods returns the result only when the price changes.
     rpc Follow(FollowRequest) returns (stream FollowResponse) {};
 
     // Bidirectional streaming RPC 
-    // Places ordes to buy/sell 
-    // and returns them when they are executed
+    // Places ordes to buy/sell stocks, the orders might be with limit price or not.
+    // The method returns the result when the orders are executed.
     rpc Trade(stream TradeRequest) returns (stream TradeResponse) {};
 }

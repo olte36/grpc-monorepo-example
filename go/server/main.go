@@ -21,7 +21,7 @@ func main() {
 	var err error
 	defer func() {
 		if err != nil {
-			fmt.Println(err)
+			log.Error().Msg(err.Error())
 		}
 		os.Exit(exitCode)
 	}()
@@ -31,8 +31,9 @@ func main() {
 
 	var port uint
 	var logLevelStr string
-	flag.UintVar(&port, "port", 8080, "")
-	flag.StringVar(&logLevelStr, "loglevel", "info", "")
+	flag.UintVar(&port, "port", 8080, "The port to listen to")
+	flag.StringVar(&logLevelStr, "loglevel", "info", "The log level")
+	flag.Parse()
 
 	logLevel, err := zerolog.ParseLevel(logLevelStr)
 	if err != nil {

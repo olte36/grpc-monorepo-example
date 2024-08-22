@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"math/rand"
 	"os"
@@ -27,7 +28,11 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
 	defer cancel()
 
-	conn, err := grpc.NewClient("localhost:8080", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	var serverUrl string
+	flag.StringVar(&serverUrl, "server", "localhost:8080", "The server to connect in format <host>:<port>")
+	flag.Parse()
+
+	conn, err := grpc.NewClient(serverUrl, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		exitCode = 1
 		return
@@ -37,6 +42,7 @@ func main() {
 	// Create a grpc client
 	client := api.NewStockServiceClient(conn)
 
+	// get the list of stocks
 	stocks, err := impl.ListStocks(ctx, client)
 	if err != nil {
 		exitCode = 1
@@ -49,6 +55,7 @@ func main() {
 	fmt.Printf("We've chosen %s\n", stock.Ticker)
 	fmt.Println()
 
+	// offer some stocks with the duplicate to check it is rejected
 	stocksToOffer := []*api.Stock{
 		{
 			Ticker: "TSM",
@@ -65,6 +72,7 @@ func main() {
 	}
 	fmt.Println()
 
+	// track the price of the chosen stock
 	avg, err := impl.TrackPrice(ctx, client, stock)
 	if err != nil {
 		exitCode = 1
@@ -72,5 +80,6 @@ func main() {
 	}
 	fmt.Printf("The average price is %.2f\n\n", float64(avg)/100)
 
+	// do some trading
 	impl.Trade(ctx, client, stock, avg)
 }

@@ -19,19 +19,32 @@ func (s *stockServer) Follow(req *api.FollowRequest, respStream grpc.ServerStrea
 		log.Error().Msgf("We don't have the stock %s", req.Stock.Ticker)
 		return status.Errorf(codes.NotFound, "the stock %s has not been found", req.Stock.Ticker)
 	}
-	ticker := time.NewTicker(req.TrackInterval.AsDuration())
+	trackInterval := 1 * time.Second
+	onChange := true
+	prevPrice := 0
+	if req.TrackInterval != nil {
+		onChange = false
+		trackInterval = req.TrackInterval.AsDuration()
+	}
+	ticker := time.NewTicker(trackInterval)
 	for {
 		select {
 		case <-respStream.Context().Done():
 			log.Info().Msgf("Finished streaming the price of %s", req.Stock.Ticker)
 			return respStream.Context().Err()
 		case <-ticker.C:
-			// suppose stocks cannot be deleted, so we don't sync them
+			s.mu.Lock()
+			currPrice := trackedStock.price
+			s.mu.Unlock()
+			if onChange && currPrice == prevPrice {
+				break
+			}
+			prevPrice = currPrice
 			resp := api.FollowResponse{
 				Stock: &api.Stock{
 					Ticker: trackedStock.ticker,
 				},
-				Price: uint32(trackedStock.price),
+				Price: uint32(currPrice),
 			}
 			err := respStream.Send(&resp)
 			if err != nil {
