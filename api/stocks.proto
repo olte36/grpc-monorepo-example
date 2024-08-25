@@ -9,7 +9,9 @@ package api;
 import "google/protobuf/empty.proto";
 import "google/protobuf/duration.proto";
 
-option go_package="genproto/api";
+option go_package = "genproto/api";
+option java_package = "olte36.example.api";
+option java_multiple_files = true;
 
 // A stock with the ticker and the optional description.
 // The ticker must be unique across all stocks.
@@ -24,7 +26,7 @@ message ListResponse {
 }
 
 // A request to offer a new stock.
-// The price is in notaion 1.23E2 (123).
+// The price is in notation 1.23E2 (123).
 message OfferRequest {
     Stock stock = 1;
     uint32 initial_price = 2;
@@ -43,7 +45,7 @@ message FollowRequest {
 }
 
 // The current stock price.
-// The price is in notaion 1.23E2 (123).
+// The price is in notation 1.23E2 (123).
 message FollowResponse {
     Stock stock = 1;
     uint32 price = 2;
@@ -52,7 +54,7 @@ message FollowResponse {
 // An order to buy or sell the stock with an optional limit price.
 // If the amount is negative, the stock will be sold, 
 // if the amount is positive, the stock will be bought.
-// The price is in notaion 1.23E2 (123).
+// The price is in notation 1.23E2 (123).
 message TradeRequest {
     Stock stock = 1;
     int32 amount = 2;
@@ -62,7 +64,7 @@ message TradeRequest {
 // An order result.
 // If the amount is negative, the stock has been sold, 
 // if the amount is positive, the stock has been bought.
-// The price is in notaion 1.23E2 (123).
+// The price is in notation 1.23E2 (123).
 message TradeResponse {
     Stock stock = 1;
     int32 amount = 2;
@@ -84,11 +86,11 @@ service StockService {
 
     // Server-side streaming RPC 
     // Tracks the price of the stock with the interval passed in the request.
-    // If the track interval is ommited, the methods returns the result only when the price changes.
+    // If the track interval is omitted, the methods returns the result only when the price changes.
     rpc Follow(FollowRequest) returns (stream FollowResponse) {};
 
     // Bidirectional streaming RPC 
-    // Places ordes to buy/sell stocks, the orders might be with limit price or not.
+    // Places orders to buy/sell stocks, the orders might be with limit price or not.
     // The method returns the result when the orders are executed.
     rpc Trade(stream TradeRequest) returns (stream TradeResponse) {};
 }
