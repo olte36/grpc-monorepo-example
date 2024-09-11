@@ -42,6 +42,7 @@ message OfferResponse {
 message FollowRequest {
     Stock stock = 1;
     optional google.protobuf.Duration track_interval = 2;
+    // google.protobuf.Duration track_duration = 3;
 }
 
 // The current stock price.

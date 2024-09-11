@@ -14,6 +14,7 @@ public final class Main {
                     .build();
             server.start();
             server.awaitTermination();
+
         } catch (Exception e) {
             System.out.println(e.getMessage());
             System.exit(1);

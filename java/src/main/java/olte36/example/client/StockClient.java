@@ -1,12 +1,14 @@
 package olte36.example.client;
 
+import com.google.protobuf.Duration;
 import com.google.protobuf.Empty;
 import io.grpc.Channel;
+import io.grpc.Deadline;
 import io.grpc.StatusRuntimeException;
-import olte36.example.api.ListResponse;
-import olte36.example.api.Stock;
-import olte36.example.api.StockServiceGrpc;
+import olte36.example.api.*;
 
+import java.util.Iterator;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 public class StockClient {
@@ -34,6 +36,19 @@ public class StockClient {
         } catch (StatusRuntimeException e) {
             throw new Exception(String.format("Unable to get the list of stocks, status code: %d", e.getStatus().getCode().value()), e);
         }
+    }
+
+    public void followStockPrice() {
+        FollowRequest request = FollowRequest.newBuilder()
+                .setStock(Stock.newBuilder().setTicker("NVDA"))
+                .setTrackInterval(Duration.newBuilder().setSeconds(2))
+                .build();
+        Iterator<FollowResponse> responseIterator = this.blockingStub
+                .withDeadline(Deadline.after(10, TimeUnit.SECONDS))
+                .follow(request);
+        responseIterator.forEachRemaining(s -> {
+            System.out.printf("%s -%d\n", s.getStock().getTicker(), s.getPrice());
+        });
     }
 
 }
